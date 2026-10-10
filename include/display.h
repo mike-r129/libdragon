@@ -167,17 +167,17 @@ typedef struct {
 #define VI_CRT_MARGIN      0.05f
 
 /** @brief 256x240 mode, stretched to 4:3, no borders */
-const resolution_t RESOLUTION_256x240 = {.width = 256, .height = 240, .interlaced = INTERLACE_OFF};
+const resolution_t RESOLUTION_256x240 = {.width = 256, .height = 240, .interlaced = INTERLACE_OFF, .aspect_ratio = 0.0f, .overscan_margin = 0.0f};
 /** @brief 320x240 mode, no borders */
-const resolution_t RESOLUTION_320x240 = {.width = 320, .height = 240, .interlaced = INTERLACE_OFF};
+const resolution_t RESOLUTION_320x240 = {.width = 320, .height = 240, .interlaced = INTERLACE_OFF, .aspect_ratio = 0.0f, .overscan_margin = 0.0f};
 /** @brief 512x240 mode, stretched to 4:3, no borders */
-const resolution_t RESOLUTION_512x240 = {.width = 512, .height = 240, .interlaced = INTERLACE_OFF};
+const resolution_t RESOLUTION_512x240 = {.width = 512, .height = 240, .interlaced = INTERLACE_OFF, .aspect_ratio = 0.0f, .overscan_margin = 0.0f};
 /** @brief 640x240 mode, stretched to 4:3, no borders */
-const resolution_t RESOLUTION_640x240 = {.width = 640, .height = 240, .interlaced = INTERLACE_OFF};
+const resolution_t RESOLUTION_640x240 = {.width = 640, .height = 240, .interlaced = INTERLACE_OFF, .aspect_ratio = 0.0f, .overscan_margin = 0.0f};
 /** @brief 512x480 mode, interlaced, stretched to 4:3, no borders */
-const resolution_t RESOLUTION_512x480 = {.width = 512, .height = 480, .interlaced = INTERLACE_HALF};
+const resolution_t RESOLUTION_512x480 = {.width = 512, .height = 480, .interlaced = INTERLACE_HALF, .aspect_ratio = 0.0f, .overscan_margin = 0.0f};
 /** @brief 640x480 mode, interlaced, no borders */
-const resolution_t RESOLUTION_640x480 = {.width = 640, .height = 480, .interlaced = INTERLACE_HALF};
+const resolution_t RESOLUTION_640x480 = {.width = 640, .height = 480, .interlaced = INTERLACE_HALF, .aspect_ratio = 0.0f, .overscan_margin = 0.0f};
 
 #undef const
 

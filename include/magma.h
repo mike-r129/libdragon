@@ -676,7 +676,7 @@ inline uint8_t mg_culling_parms_to_rsp_state(const mg_culling_parms_t *culling)
         cull_mode = 0;
         break;
     default:
-        assertf(0, "%d is not a valid cull mode!", culling->cull_mode);
+        assertf(0, "%d is not a valid cull mode!", (int)culling->cull_mode);
         cull_mode = 2;
     }
 
@@ -688,7 +688,7 @@ inline uint8_t mg_culling_parms_to_rsp_state(const mg_culling_parms_t *culling)
         is_front_cw = 1;
         break;
     default:
-        assertf(0, "%d is not a valid front face winding direction!", culling->front_face);
+        assertf(0, "%d is not a valid front face winding direction!", (int)culling->front_face);
         is_front_cw = 0;
     }
 
@@ -720,6 +720,8 @@ inline void mg_set_viewport_fullscreen(resolution_t res)
         .height = (float) res.height,
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
+        .z_near = 0.0f,
+        .z_far = 0.0f,
     };
     mg_set_viewport(&viewport);
 }

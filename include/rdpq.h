@@ -684,7 +684,6 @@ inline void rdpq_load_tlut_raw(rdpq_tile_t tile, int color_idx, int num_colors)
  */
 inline void rdpq_set_tile_size_fx(rdpq_tile_t tile, uint16_t s0, uint16_t t0, uint16_t s1, uint16_t t1)
 {
-    assertf((s0) >= 0 && (t0) >= 0 && (s1) >= 0 && (t1) >= 0, "texture coordinates must be positive");
     assertf((s0) <= 1024*4 && (t0) <= 1024*4 && (s1) <= 1024*4 && (t1) <= 1024*4, "texture coordinates must be smaller than 1024");
 
     extern void __rdpq_write8_syncchange(uint32_t, uint32_t, uint32_t, uint32_t);
@@ -783,7 +782,7 @@ inline void rdpq_set_tile(rdpq_tile_t tile,
 	uint16_t tmem_pitch,
     const rdpq_tileparms_t *parms)
 {
-    static const rdpq_tileparms_t default_parms = {0};
+    static const rdpq_tileparms_t default_parms = {};
     if (!parms) parms = &default_parms;
     else {
         assertf(parms->s.shift >= -5 && parms->s.shift <= 10, "invalid s shift %d: must be in [-5..10]", parms->s.shift);
