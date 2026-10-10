@@ -511,6 +511,89 @@ uint32_t dso_translate_reloc_symbol_idx(elf_info_t *elf_info, uint32_t sym_idx)
     return (result-elf_info->import_syms)+1;
 }
 
+bool elf_rela_read(FILE *file, Elf32_Shdr *reloc_section, uint32_t reloc_index, Elf32_Rela *reloc)
+{
+    uint32_t offset = reloc_index*sizeof(Elf32_Rela);
+    //Warn if invalid symbol is read
+    if(offset > reloc_section->sh_size) {
+        fprintf(stderr, "Trying to read invalid relocation %d\n", reloc_index);
+        return false;
+    }
+    //Read ELF symbol
+    if(!read_checked(file, reloc_section->sh_offset+offset, reloc, sizeof(Elf32_Rela))) {
+        fprintf(stderr, "Failed to read relocation %d\n", reloc_index);
+        return false;
+    }
+    //Byteswap relocation fields
+    bswap32(&reloc->r_offset);
+    bswap32(&reloc->r_info);
+    bswap32((uint32_t *)&reloc->r_addend);
+    return true;
+}
+
+typedef struct {
+    Elf32_Rela rela;    ///< ELF relocation (r_addend is 0 for SHT_REL)
+    uint32_t key;       ///< Sort key used to pair HI16 with LO16
+    uint32_t index;     ///< Original position (keeps the sort stable)
+} rela_order_t;
+
+static int rela_order_compare(const void *a, const void *b)
+{
+    const rela_order_t *ra = a, *rb = b;
+    if(ra->key != rb->key) {
+        return ra->key < rb->key ? -1 : 1;
+    }
+    return ra->index < rb->index ? -1 : (ra->index > rb->index);
+}
+
+/*
+ * The DSO loader (dlfcn.c) resolves a R_MIPS_HI16 (or R_MIPS_TLS_TPREL_HI16)
+ * by reading the in-place value of the *next* R_MIPS_LO16 (TPREL_LO16) in the
+ * relocation list. With SHT_REL (o32/o64 objects) GAS guarantees that order.
+ * With SHT_RELA (n32 objects) the relocations follow instruction order, so a
+ * HI16 can be followed by the LO16 of a different symbol, e.g. when GCC
+ * interleaves two lui/addiu pairs. Move each HI16 right before a LO16 with the
+ * same symbol and addend, which is the order GAS produces for REL.
+ */
+static void rela_pair_hi16(rela_order_t *list, uint32_t num)
+{
+    for(uint32_t i=0; i<num; i++) {
+        list[i].index = i;
+        list[i].key = 2*i+1;
+    }
+    for(uint32_t i=0; i<num; i++) {
+        uint8_t type = ELF32_R_TYPE(list[i].rela.r_info);
+        uint8_t lo_type;
+        if(type == R_MIPS_HI16) {
+            lo_type = R_MIPS_LO16;
+        } else if(type == R_MIPS_TLS_TPREL_HI16) {
+            lo_type = R_MIPS_TLS_TPREL_LO16;
+        } else {
+            continue;
+        }
+        //Prefer the first matching LO16 after the HI16, else any before it
+        int64_t match = -1;
+        for(uint32_t pass=0; pass<2 && match<0; pass++) {
+            uint32_t from = pass == 0 ? i+1 : 0;
+            uint32_t to = pass == 0 ? num : i;
+            for(uint32_t j=from; j<to; j++) {
+                if(ELF32_R_TYPE(list[j].rela.r_info) == lo_type
+                    && ELF32_R_SYM(list[j].rela.r_info) == ELF32_R_SYM(list[i].rela.r_info)
+                    && list[j].rela.r_addend == list[i].rela.r_addend) {
+                    match = j;
+                    break;
+                }
+            }
+        }
+        if(match < 0) {
+            verbose("Unpaired HI16 relocation at 0x%08" PRIx32 "\n", list[i].rela.r_offset);
+            continue;
+        }
+        list[i].key = 2*(uint32_t)match;
+    }
+    qsort(list, num, sizeof(rela_order_t), rela_order_compare);
+}
+
 bool dso_build_relocations(dso_module_t *module, elf_info_t *elf_info)
 {
     for(Elf32_Half i=0; i<elf_info->header.e_shnum; i++) {
@@ -518,7 +601,9 @@ bool dso_build_relocations(dso_module_t *module, elf_info_t *elf_info)
         if(!elf_section_header_read(elf_info, i, &shdr)) {
             return false;
         }
-        if(shdr.sh_type == SHT_REL) {
+        //n32 objects (N64-SDK) use SHT_RELA; o32/o64 objects use SHT_REL
+        if(shdr.sh_type == SHT_REL || shdr.sh_type == SHT_RELA) {
+            bool is_rela = shdr.sh_type == SHT_RELA;
             //Read applied section
             Elf32_Shdr applied_shdr;
             if(!elf_section_header_read(elf_info, shdr.sh_info, &applied_shdr)) {
@@ -526,22 +611,48 @@ bool dso_build_relocations(dso_module_t *module, elf_info_t *elf_info)
             }
             //Include relocations applied to sections fully inside program
             if(elf_section_fully_inside_prog(elf_info, &applied_shdr)) {
-                for(uint32_t j=0; j<shdr.sh_size/sizeof(Elf32_Rel); j++) {
+                uint32_t num_relocs = shdr.sh_size/(is_rela ? sizeof(Elf32_Rela) : sizeof(Elf32_Rel));
+                rela_order_t *relocs = calloc(num_relocs ? num_relocs : 1, sizeof(rela_order_t));
+                for(uint32_t j=0; j<num_relocs; j++) {
+                    if(is_rela) {
+                        if(!elf_rela_read(elf_info->file, &shdr, j, &relocs[j].rela)) {
+                            free(relocs);
+                            return false;
+                        }
+                    } else {
+                        Elf32_Rel rel;
+                        if(!elf_reloc_read(elf_info->file, &shdr, j, &rel)) {
+                            free(relocs);
+                            return false;
+                        }
+                        relocs[j].rela.r_offset = rel.r_offset;
+                        relocs[j].rela.r_info = rel.r_info;
+                        relocs[j].rela.r_addend = 0;
+                    }
+                }
+                //The loader relocates the in-place values written by the
+                //final link (relative to address 0), so RELA addends are
+                //only needed to pair HI16 with LO16.
+                if(is_rela) {
+                    rela_pair_hi16(relocs, num_relocs);
+                }
+                for(uint32_t j=0; j<num_relocs; j++) {
                     //Read ELF relocation
                     Elf32_Rel elf_reloc;
-                    if(!elf_reloc_read(elf_info->file, &shdr, j, &elf_reloc)) {
-                        return false;
-                    }
+                    elf_reloc.r_offset = relocs[j].rela.r_offset;
+                    elf_reloc.r_info = relocs[j].rela.r_info;
                     //Check if relocation type is valid
                     if(elf_reloc_check_invalid(&elf_reloc)) {
                         fprintf(stderr, "Unsupported relocations present in ELF\n");
                         fprintf(stderr, "Compile without -fPIC, -fpic, -mshared, or -mabicalls to fix\n");
+                        free(relocs);
                         return false;
                     }
                     //Check if relocation targets defined GP-Relative symbol
                     if(elf_info->syms[ELF32_R_SYM(elf_reloc.r_info)].section != SHN_UNDEF && ELF32_R_TYPE(elf_reloc.r_info) == R_MIPS_GPREL16) {
                         fprintf(stderr, "Tried to use defined symbol as GP-Relative\n");
                         fprintf(stderr, "Compile with -G 0 or -mno-gpopt to fix\n");
+                        free(relocs);
                         return false;
                     }
                     //Convert into DSO symbol index
@@ -552,6 +663,7 @@ bool dso_build_relocations(dso_module_t *module, elf_info_t *elf_info)
                     reloc.info = (ELF32_R_TYPE(elf_reloc.r_info) << 24)|sym_index; //Merge in type with symbol index
                     dso_push_relocation(module, &reloc);
                 }
+                free(relocs);
             }
         }
     }
