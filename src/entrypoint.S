@@ -13,7 +13,7 @@
 
 	.set noreorder
 
-	.section .boot
+	.section .boot, "ax"
 	.global _start
 _start:
 	/* initialize small data pointer */
