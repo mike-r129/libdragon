@@ -370,6 +370,16 @@ end_interrupt:
 	ldc1 $f17,(STACK_FPR+17*8)(sp)
 	ldc1 $f18,(STACK_FPR+18*8)(sp)
 	ldc1 $f19,(STACK_FPR+19*8)(sp)
+	# Under the n32 ABI the odd registers $f21-$f31 are caller-saved too
+	# (only the even $f20-$f30 are callee-saved), so a C handler may clobber
+	# them. save_fpu_regs saves them, restore them here. Under o64 they are
+	# callee-saved and this is redundant but harmless.
+	ldc1 $f21,(STACK_FPR+21*8)(sp)
+	ldc1 $f23,(STACK_FPR+23*8)(sp)
+	ldc1 $f25,(STACK_FPR+25*8)(sp)
+	ldc1 $f27,(STACK_FPR+27*8)(sp)
+	ldc1 $f29,(STACK_FPR+29*8)(sp)
+	ldc1 $f31,(STACK_FPR+31*8)(sp)
 
 	lw t0, STACK_FC31(sp)
 	ctc1 t0, $f31
@@ -467,6 +477,14 @@ save_fpu_regs:
 	sdc1 $f17,(STACK_FPR+17*8)(a0)
 	sdc1 $f18,(STACK_FPR+18*8)(a0)
 	sdc1 $f19,(STACK_FPR+19*8)(a0)
+	# n32: the odd registers $f21-$f31 are caller-saved as well (see
+	# end_interrupt).
+	sdc1 $f21,(STACK_FPR+21*8)(a0)
+	sdc1 $f23,(STACK_FPR+23*8)(a0)
+	sdc1 $f25,(STACK_FPR+25*8)(a0)
+	sdc1 $f27,(STACK_FPR+27*8)(a0)
+	sdc1 $f29,(STACK_FPR+29*8)(a0)
+	sdc1 $f31,(STACK_FPR+31*8)(a0)
 	jr ra
 	nop
 inthandler_end:
