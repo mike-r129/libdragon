@@ -36,6 +36,14 @@ typedef struct coroutine_s coroutine_t;
 LIBDRAGON_PREVIEW_API
 coroutine_t *coro_create(void (*fn)(void *), void *arg, size_t stack_size);
 
+#if defined(__cplusplus) && defined(__GNUC__) && !defined(__clang__)
+// GCC 16 predeclares the C++20 coroutine builtins coro_resume(void*) and
+// coro_destroy(void*); our public functions of the same name take a
+// coroutine_t*. The user declaration replaces the builtin (intended), but
+// -Wbuiltin-declaration-mismatch is an error under -Werror: silence it here.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wbuiltin-declaration-mismatch"
+#endif
 /**
  * @brief Resumes execution
  * @preview
@@ -48,6 +56,9 @@ coroutine_t *coro_create(void (*fn)(void *), void *arg, size_t stack_size);
  */
 LIBDRAGON_PREVIEW_API
 void coro_resume(coroutine_t *co);
+#if defined(__cplusplus) && defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 /**
  * @brief Yields and gives back control to the caller context.
@@ -76,6 +87,11 @@ void coro_yield(void);
 LIBDRAGON_PREVIEW_API
 void coro_sleep(uint64_t ticks);
 
+#if defined(__cplusplus) && defined(__GNUC__) && !defined(__clang__)
+// See coro_resume: GCC 16's coro_destroy(void*) builtin.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wbuiltin-declaration-mismatch"
+#endif
 /**
  * @brief Frees all resources associated with a coroutine.
  * @preview
@@ -87,6 +103,9 @@ void coro_sleep(uint64_t ticks);
  */
 LIBDRAGON_PREVIEW_API
 void coro_destroy(coroutine_t *co);
+#if defined(__cplusplus) && defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 /**
  * @brief Checks if a coroutine has finished execution.
