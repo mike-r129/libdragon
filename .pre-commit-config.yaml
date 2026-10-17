@@ -1,0 +1,12 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # trailing-whitespace and end-of-file-fixer are deliberately left out:
+      # they rewrite whole files, and libdragon's sources carry whitespace
+      # we don't want to churn in this fork's diffs.
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: detect-private-key
+      - id: check-yaml
+      - id: check-json
